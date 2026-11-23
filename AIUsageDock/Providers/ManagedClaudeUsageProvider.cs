@@ -32,7 +32,7 @@ internal sealed class ManagedClaudeUsageProvider : IUsageProvider
         try
         {
             if (_removed) return UsageResult.Failure(UsageFailureReason.NotSignedIn, "Band removed");
-            if (!force && _cached is not null && DateTimeOffset.UtcNow - _readAt < TimeSpan.FromMinutes(1)) return _cached;
+            if (!force && _cached is not null && DateTimeOffset.UtcNow - _readAt < TimeSpan.FromSeconds(45)) return _cached;
             if (!Directory.Exists(_profile)) return UsageResult.Failure(UsageFailureReason.NotSignedIn, "Click this band to sign in to Claude");
             var executable = ExecutableResolver.ResolveClaude();
             if (executable is null) return UsageResult.Failure(UsageFailureReason.CliUnavailable, "Claude Code CLI not found");

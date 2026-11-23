@@ -6,7 +6,8 @@ namespace AIUsageDock.Providers;
 
 internal sealed class AntigravityUsageProvider : IUsageProvider
 {
-    private static readonly TimeSpan CacheLifetime = TimeSpan.FromMinutes(1);
+    // Shorter than the 1-minute refresh tick, so every tick reads fresh data.
+    private static readonly TimeSpan CacheLifetime = TimeSpan.FromSeconds(45);
     // agy checks for updates every 16 minutes and hands the download to a detached copy
     // of itself. That copy asks Windows for a console of its own, so the terminal host
     // draws a window for it no matter how quietly this process started the parent.

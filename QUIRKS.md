@@ -16,6 +16,10 @@ Keep the AI usage bands **after** the built-in **Performance Monitor** band (CPU
 
 A refresh updates each band's title and subtitle directly. The extension deliberately does not raise `ItemsChanged` on refresh: that makes Command Palette reload every provider's commands and rebuild the Dock, which resets the other bands.
 
+### Bands froze after Command Palette restarted
+
+The extension process outlives Command Palette. A restarted Command Palette reconnects to the same band objects and subscribes again, but the old host's handler stays first in the list. SDK 0.9 raises `PropChanged` as one multicast call, so the dead handler throws `RPC_E_DISCONNECTED` and the live Dock never receives the update, while the detail page (read fresh on open) looks current. This is [microsoft/PowerToys#50483](https://github.com/microsoft/PowerToys/issues/50483), fixed only in later SDKs. `Bands/BandListItem.cs` notifies each subscriber separately and drops disconnected ones.
+
 ### Detail pages follow the palette theme
 
 Detail pages are Adaptive Cards rendered by Command Palette. Colours, fonts, and the exact shade of green, yellow, and red on the bars come from the host's Adaptive Card theme, not from the extension.

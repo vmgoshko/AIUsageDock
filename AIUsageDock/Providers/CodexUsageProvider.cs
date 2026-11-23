@@ -7,7 +7,8 @@ namespace AIUsageDock.Providers;
 
 internal sealed class CodexUsageProvider : IUsageProvider
 {
-    private static readonly TimeSpan CacheLifetime = TimeSpan.FromMinutes(1);
+    // Shorter than the 1-minute refresh tick, so every tick reads fresh data.
+    private static readonly TimeSpan CacheLifetime = TimeSpan.FromSeconds(45);
     private static readonly TimeSpan ProcessTimeout = TimeSpan.FromSeconds(15);
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
     private UsageResult? _cached;

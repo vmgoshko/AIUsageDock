@@ -8,13 +8,13 @@ namespace AIUsageDock.Bands;
 internal sealed class UsageBand
 {
     private readonly IUsageProvider _provider;
-    private readonly ListItem _bandItem;
+    private readonly BandListItem _bandItem;
     private string? _appliedIconPath;
 
     public UsageBand(IUsageProvider provider, AccountPage page)
     {
         _provider = provider;
-        _bandItem = new ListItem(page)
+        _bandItem = new BandListItem(page)
         {
             Title = $"{provider.DisplayName} —",
             Subtitle = "click to sign in or view usage",
