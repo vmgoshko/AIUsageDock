@@ -9,13 +9,13 @@ public sealed class DockBandContractTests
     public void EveryDockBandHasAStableCommandId()
     {
         using var provider = new AIUsageDockCommandsProvider(
-            new ProviderSelectionSettings(Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json")),
+            new AccountCatalog(Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json")),
             startTimer: false);
 
         var bands = provider.GetDockBands();
 
         Assert.NotNull(bands);
-        Assert.Equal(3, bands.Length);
+        Assert.Single(bands);
         Assert.All(bands, band =>
         {
             Assert.NotNull(band.Command);

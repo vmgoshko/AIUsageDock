@@ -11,8 +11,8 @@ public static class Program
             args,
             new ExtensionHostRunnerParameters
             {
-                PublisherMoniker = "AIUsageDock",
-                ProductMoniker = "AIUsageDock",
+                PublisherMoniker = "CodexUsageDock",
+                ProductMoniker = "CodexUsageDock",
                 ExtensionFactories = new()
                 {
                     new DelegateExtensionFactory(disposed => new AIUsageDockExtension(disposed)),
@@ -20,4 +20,3 @@ public static class Program
             });
     }
 }
-

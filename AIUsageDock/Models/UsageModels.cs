@@ -86,5 +86,6 @@ internal interface IUsageProvider : IDisposable
     string Id { get; }
     string DisplayName { get; }
     string IconName { get; }
+    UsageHistory? History => null;
     Task<UsageResult> GetAsync(bool force = false, CancellationToken cancellationToken = default);
 }

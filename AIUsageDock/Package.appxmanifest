@@ -7,10 +7,10 @@
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   IgnorableNamespaces="uap uap3 com rescap">
 
-  <Identity Name="Gabox.AIUsageDock" Publisher="CN=AIUsageDock-Dev" Version="1.0.1.0" />
+  <Identity Name="VMGos.CodexUsageDock" Publisher="CN=CodexUsageDock-Dev" Version="1.5.1.0" />
 
   <Properties>
-    <DisplayName>AI Usage Dock</DisplayName>
+    <DisplayName>Codex Usage Dock</DisplayName>
     <PublisherDisplayName>Gabriel Chavez</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -26,8 +26,8 @@
   <Applications>
     <Application Id="App" Executable="AIUsageDock.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
-        DisplayName="AI Usage Dock"
-        Description="AIUsageDock by Gabriel Chavez - Developed in Mexico with love"
+        DisplayName="Codex Usage Dock"
+        Description="Codex usage for independent accounts"
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png" />
@@ -35,22 +35,22 @@
       <Extensions>
         <com:Extension Category="windows.comServer">
           <com:ComServer>
-            <com:ExeServer Executable="AIUsageDock.exe" Arguments="-RegisterProcessAsComServer" DisplayName="AI Usage Dock">
-              <com:Class Id="a8900b57-444a-4352-99ba-9bb6f5d4316c" DisplayName="AI Usage Dock" />
+            <com:ExeServer Executable="AIUsageDock.exe" Arguments="-RegisterProcessAsComServer" DisplayName="Codex Usage Dock">
+              <com:Class Id="f521ca1e-54ec-4dca-87f6-e1ddba95bf58" DisplayName="Codex Usage Dock" />
             </com:ExeServer>
           </com:ComServer>
         </com:Extension>
         <uap3:Extension Category="windows.appExtension">
           <uap3:AppExtension
             Name="com.microsoft.commandpalette"
-            Id="AIUsageDock"
+            Id="CodexUsageDock"
             PublicFolder="Public"
-            DisplayName="AI Usage Dock"
-            Description="AIUsageDock by Gabriel Chavez - Developed in Mexico with love">
+            DisplayName="Codex Usage Dock"
+            Description="Codex usage for independent accounts">
             <uap3:Properties>
               <CmdPalProvider>
                 <Activation>
-                  <CreateInstance ClassId="a8900b57-444a-4352-99ba-9bb6f5d4316c" />
+                  <CreateInstance ClassId="f521ca1e-54ec-4dca-87f6-e1ddba95bf58" />
                 </Activation>
                 <SupportedInterfaces>
                   <Commands />

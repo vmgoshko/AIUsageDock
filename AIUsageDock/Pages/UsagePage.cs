@@ -33,7 +33,7 @@ internal sealed class UsagePage : ContentPage
         [
             new FormContent
             {
-                TemplateJson = UsageCard.Build(result, _provider.DisplayName, _provider.Id, DateTimeOffset.UtcNow),
+                TemplateJson = UsageCard.Build(result, _provider.DisplayName, _provider.Id, DateTimeOffset.UtcNow, _provider.History),
                 DataJson = "{}",
             },
         ];

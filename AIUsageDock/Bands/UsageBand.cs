@@ -11,13 +11,13 @@ internal sealed class UsageBand
     private readonly ListItem _bandItem;
     private string? _appliedIconPath;
 
-    public UsageBand(IUsageProvider provider, UsagePage page)
+    public UsageBand(IUsageProvider provider, AccountPage page)
     {
         _provider = provider;
         _bandItem = new ListItem(page)
         {
             Title = $"{provider.DisplayName} —",
-            Subtitle = "loading usage",
+            Subtitle = "click to sign in or view usage",
         };
 
         DockItem = new WrappedDockItem(
@@ -25,10 +25,16 @@ internal sealed class UsageBand
             $"aiusagedock.dock.{provider.Id}",
             $"{provider.DisplayName} usage");
 
-        ApplyIcon(low: false);
+        ApplyIcon();
     }
 
     public WrappedDockItem DockItem { get; }
+    internal void UpdateName(string name)
+    {
+        DockItem.Title = $"{name} usage";
+        _bandItem.Title = $"{name} —";
+        _ = RefreshAsync();
+    }
 
     public async Task RefreshAsync(bool force = false)
     {
@@ -39,7 +45,7 @@ internal sealed class UsageBand
             {
                 _bandItem.Title = $"{_provider.DisplayName} —";
                 _bandItem.Subtitle = FriendlyError(result);
-                ApplyIcon(low: false);
+                ApplyIcon();
                 return;
             }
 
@@ -48,7 +54,7 @@ internal sealed class UsageBand
             {
                 _bandItem.Title = $"{_provider.DisplayName} —";
                 _bandItem.Subtitle = "no limits reported";
-                ApplyIcon(low: false);
+                ApplyIcon();
                 return;
             }
 
@@ -72,31 +78,31 @@ internal sealed class UsageBand
             }
 
             _bandItem.Subtitle = subtitleParts.Count == 0 ? snapshot.Source : string.Join(" · ", subtitleParts);
-            ApplyIcon(primaryLeft < 20);
+            ApplyIcon(snapshot.MostConstrained?.RemainingPercent);
         }
         catch
         {
             _bandItem.Title = $"{_provider.DisplayName} —";
             _bandItem.Subtitle = "refresh failed";
-            ApplyIcon(low: false);
+            ApplyIcon();
         }
     }
 
-    private static string FriendlyError(UsageResult result) => result.FailureReason switch
+    private string FriendlyError(UsageResult result) => result.FailureReason switch
     {
         UsageFailureReason.CliUnavailable => result.Message ?? "CLI not found",
-        UsageFailureReason.NotSignedIn => "sign in with the CLI",
+        UsageFailureReason.NotSignedIn => $"sign in to {_provider.DisplayName} in Command Palette",
         UsageFailureReason.TimedOut => "refresh timed out",
         UsageFailureReason.InvalidData => result.Message ?? "no usage data",
         UsageFailureReason.ProcessFailed => result.Message ?? "CLI refresh failed",
         _ => result.Message ?? "usage unavailable",
     };
 
-    private void ApplyIcon(bool low)
+    private void ApplyIcon(double? remainingPercent = null)
     {
         // Fixed-color SVGs render consistently in the Dock. SVG currentColor is not
         // resolved by every Command Palette image path and can appear transparent.
-        var path = ProviderIcons.FilledPath(_provider);
+        var path = ProviderIcons.DockPath(_provider, remainingPercent);
         if (path == _appliedIconPath)
         {
             return;

@@ -4,7 +4,7 @@ $ErrorActionPreference = "Stop"
 #   AIUsageDock-<version>-x64.msix   the package
 #   AIUsageDock-Dev.cer              the public cert users must trust before installing
 #
-# Signing uses a self-signed cert with subject CN=AIUsageDock-Dev (the manifest
+# Signing uses a self-signed cert with subject CN=CodexUsageDock-Dev (the manifest
 # Publisher). The script creates one in Cert:\CurrentUser\My if none exists.
 
 $projectDirectory = Join-Path $PSScriptRoot "AIUsageDock"

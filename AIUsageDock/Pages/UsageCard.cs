@@ -13,17 +13,18 @@ internal static class UsageCard
     private const int LowThresholdPercent = 25;
     private const int CriticalThresholdPercent = 10;
 
-    public static string Build(UsageResult result, string providerName, string providerId, DateTimeOffset now)
+    public static string Build(UsageResult result, string providerName, string providerId, DateTimeOffset now, UsageHistory? history = null)
     {
         var body = new JsonArray();
 
         if (result.Snapshot is not { } snapshot)
         {
             AppendFailure(body, result, providerName, providerId);
+            AppendHistory(body, history, now);
         }
         else
         {
-            AppendSnapshot(body, result, snapshot, now);
+            AppendSnapshot(body, result, snapshot, now, history);
         }
 
         var card = new JsonObject
@@ -37,11 +38,35 @@ internal static class UsageCard
         return card.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
     }
 
-    private static void AppendSnapshot(JsonArray body, UsageResult result, UsageSnapshot snapshot, DateTimeOffset now)
+    private static void AppendHistory(JsonArray body, UsageHistory? history, DateTimeOffset now)
+    {
+        if (history is not null)
+        {
+            var samples = history.GetSamples(now.AddHours(-24));
+            body.Add(Text("Usage history · last 24h", weight: "Bolder", spacing: "Medium", separator: true));
+            if (history.Error is not null) body.Add(Text(history.Error, size: "Small", color: "Warning"));
+            if (samples.Length == 0)
+                body.Add(Text("History starts with the first successful refresh. Readings are saved once a minute while the extension is running.", size: "Small", subtle: true));
+            else
+            {
+                body.Add(new JsonObject
+                {
+                    ["type"] = "Image", ["size"] = "Stretch",
+                    ["url"] = "data:image/png;base64," + Convert.ToBase64String(UsageHistoryChart.Render(samples, now)),
+                    ["altText"] = "Used quota over the last 24 hours: green for the 5-hour window, blue for the week.",
+                    ["spacing"] = "Small",
+                });
+                body.Add(Text($"{samples.Length} readings · used quota, % · gaps and resets break the lines · retained for 14 days", size: "Small", subtle: true));
+            }
+        }
+
+    }
+
+    private static void AppendSnapshot(JsonArray body, UsageResult result, UsageSnapshot snapshot, DateTimeOffset now, UsageHistory? history)
     {
         body.Add(Text(
             string.IsNullOrWhiteSpace(snapshot.Plan) ? snapshot.Provider : $"{snapshot.Provider} · {snapshot.Plan}",
-            size: "Large",
+            size: "Medium",
             weight: "Bolder"));
 
         if (snapshot.IsStale)
@@ -58,9 +83,11 @@ internal static class UsageCard
             AppendWindow(body, window, now);
         }
 
+        AppendHistory(body, history, now);
+
         if (snapshot.AccountDetails.Count > 0)
         {
-            body.Add(Text("Account", weight: "Bolder", spacing: "Large"));
+            body.Add(Text("Account", weight: "Bolder", spacing: "Small"));
             var facts = new JsonArray();
             foreach (var detail in snapshot.AccountDetails)
             {
@@ -84,7 +111,7 @@ internal static class UsageCard
             $"{snapshot.Source} · updated {DescribeAge(now - snapshot.FetchedAt)} ({snapshot.FetchedAt.ToLocalTime():HH:mm:ss})",
             size: "Small",
             subtle: true,
-            spacing: "Large",
+            spacing: "Small",
             separator: true));
     }
 
@@ -98,7 +125,7 @@ internal static class UsageCard
         body.Add(new JsonObject
         {
             ["type"] = "ColumnSet",
-            ["spacing"] = "Large",
+            ["spacing"] = "Small",
             ["columns"] = new JsonArray
             {
                 new JsonObject
@@ -253,7 +280,9 @@ internal static class UsageCard
                 $"Install the {providerName} CLI and make sure `{CommandName(providerId)}` is on your PATH, then use **Refresh AI usage**."),
             UsageFailureReason.NotSignedIn => (
                 $"{providerName} is not signed in",
-                $"Run `{SignInCommand(providerId)}` in a terminal and sign in, then use **Refresh AI usage**."),
+                providerId.StartsWith("codex", StringComparison.Ordinal)
+                    ? "Go back to the account page and select **Sign in with ChatGPT**."
+                    : $"Run `{SignInCommand(providerId)}` in a terminal and sign in, then use **Refresh AI usage**."),
             UsageFailureReason.TimedOut => (
                 $"{providerName} did not respond",
                 "The CLI took too long to answer. Try **Refresh AI usage**; if it keeps happening, run the CLI once by hand to let it finish any pending update."),
@@ -267,7 +296,7 @@ internal static class UsageCard
 
     private static string CommandName(string providerId) => providerId switch
     {
-        "codex" => "codex",
+        var id when id.StartsWith("codex", StringComparison.Ordinal) => "codex",
         "claude" => "claude",
         "antigravity" => "agy",
         _ => providerId,

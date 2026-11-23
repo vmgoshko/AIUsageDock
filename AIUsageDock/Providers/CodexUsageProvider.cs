@@ -12,12 +12,25 @@ internal sealed class CodexUsageProvider : IUsageProvider
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
     private UsageResult? _cached;
 
-    public string Id => "codex";
-    public string DisplayName => "Codex";
+    private readonly string? _profileHome;
+    public CodexUsageProvider(string id = "codex", string displayName = "Codex", string? profileHome = null)
+    {
+        Id = id;
+        DisplayName = displayName;
+        _profileHome = profileHome;
+        History = profileHome is null ? null : new UsageHistory(Path.Combine(profileHome, "usage-history.json"));
+    }
+    public string Id { get; }
+    public UsageHistory? History { get; }
+    public string DisplayName { get; internal set; }
+    private bool _removed;
     public string IconName => "codex";
 
     public async Task<UsageResult> GetAsync(bool force = false, CancellationToken cancellationToken = default)
     {
+        if (_removed) return UsageResult.Failure(UsageFailureReason.NotSignedIn, "Band removed");
+        if (_profileHome is not null && !File.Exists(Path.Combine(_profileHome, "auth.json")))
+            return UsageResult.Failure(UsageFailureReason.NotSignedIn, $"Sign in to {DisplayName} using Command Palette");
         if (!force && IsFresh(_cached?.Snapshot))
         {
             return _cached!;
@@ -26,6 +39,7 @@ internal sealed class CodexUsageProvider : IUsageProvider
         await _refreshLock.WaitAsync(cancellationToken);
         try
         {
+            if (_removed) return UsageResult.Failure(UsageFailureReason.NotSignedIn, "Band removed");
             if (!force && IsFresh(_cached?.Snapshot))
             {
                 return _cached!;
@@ -44,6 +58,7 @@ internal sealed class CodexUsageProvider : IUsageProvider
                     ExecutableResolver.ResolveCodexShim(),
                     path => ReadAccountAndRateLimitsAsync(path, cancellationToken));
                 var snapshot = ParseRateLimitsJson(rateLimitsJson, DateTimeOffset.UtcNow, accountJson);
+                if (snapshot is not null) History?.Record(snapshot);
                 return _cached = snapshot is null
                     ? UsageResult.Failure(UsageFailureReason.InvalidData, "Codex returned no rate-limit windows")
                     : UsageResult.Success(snapshot);
@@ -68,6 +83,32 @@ internal sealed class CodexUsageProvider : IUsageProvider
         {
             _refreshLock.Release();
         }
+    }
+    internal async Task LogoutAndRemoveAsync(int slot)
+    {
+        var expected = Path.GetFullPath(CodexProfiles.Home(slot));
+        if (_profileHome is null || !string.Equals(Path.GetFullPath(_profileHome), expected, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Refusing to remove a profile outside this band's directory");
+        await _refreshLock.WaitAsync();
+        try
+        {
+            Commands.LoginCodexCommand.CancelLogin(slot);
+            if (Directory.Exists(expected))
+            {
+                var executable = ExecutableResolver.ResolveCodex();
+                if (executable is not null)
+                {
+                    var result = await ProcessHelpers.RunAsync(executable,
+                        ["-c", "cli_auth_credentials_store=\"file\"", "logout"], TimeSpan.FromSeconds(15),
+                        environment: new Dictionary<string, string> { ["CODEX_HOME"] = expected });
+                    if (result.ExitCode != 0) throw new InvalidOperationException("Codex logout failed; band was retained");
+                }
+                CodexProfiles.Delete(slot);
+            }
+            _cached = null;
+            _removed = true;
+        }
+        finally { _refreshLock.Release(); }
     }
 
     internal static UsageSnapshot? ParseRateLimitsJson(string json, DateTimeOffset fetchedAt, string? accountJson = null)
@@ -315,6 +356,17 @@ internal sealed class CodexUsageProvider : IUsageProvider
         }
     }
 
+    internal ProcessStartInfo CreateProfileStartInfo(string executable)
+    {
+        if (_profileHome is null)
+            return ProcessHelpers.CreateStartInfo(executable, "app-server", "--stdio");
+
+        Directory.CreateDirectory(_profileHome);
+        return ProcessHelpers.CreateStartInfo(executable,
+            ["-c", "cli_auth_credentials_store=\"file\"", "app-server", "--stdio"],
+            new Dictionary<string, string> { ["CODEX_HOME"] = _profileHome });
+    }
+
     private async Task<(string? AccountJson, string RateLimitsJson)> ReadAccountAndRateLimitsAsync(string executable, CancellationToken cancellationToken)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -322,7 +374,7 @@ internal sealed class CodexUsageProvider : IUsageProvider
 
         using var process = new Process
         {
-            StartInfo = ProcessHelpers.CreateStartInfo(executable, "app-server", "--stdio"),
+            StartInfo = CreateProfileStartInfo(executable),
         };
 
         process.Start();
@@ -346,19 +398,7 @@ internal sealed class CodexUsageProvider : IUsageProvider
             await WriteJsonLineAsync(process, new { id = 2, method = "account/read", @params = new { } });
             await WriteJsonLineAsync(process, new { id = 3, method = "account/rateLimits/read", @params = (object?)null });
 
-            // The account call is best-effort: an older app-server without it must not
-            // take the rate limits down with it.
-            string? accountJson;
-            try
-            {
-                accountJson = await WaitForResultAsync(process, 2, linked.Token);
-            }
-            catch (InvalidOperationException)
-            {
-                accountJson = null;
-            }
-
-            return (accountJson, await WaitForResultAsync(process, 3, linked.Token));
+            return await ReadAccountAndRateLimitResponsesAsync(process.StandardOutput, linked.Token);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -373,6 +413,46 @@ internal sealed class CodexUsageProvider : IUsageProvider
             ProcessHelpers.TryKill(process);
             try { await process.WaitForExitAsync(CancellationToken.None); } catch { }
         }
+    }
+
+    internal static async Task<(string? AccountJson, string RateLimitsJson)> ReadAccountAndRateLimitResponsesAsync(
+        TextReader output, CancellationToken cancellationToken = default)
+    {
+        string? accountJson = null;
+        string? rateLimitsJson = null;
+        var accountReceived = false;
+        // Concurrent RPCs may respond in either order. Preserve each response
+        // while waiting for the other instead of consuming and discarding it.
+        while (!accountReceived || rateLimitsJson is null)
+        {
+            var line = await output.ReadLineAsync(cancellationToken);
+            if (line is null)
+            {
+                if (rateLimitsJson is not null) return (accountJson, rateLimitsJson);
+                throw new InvalidOperationException("Codex app-server closed before rate-limit response");
+            }
+            using var message = JsonDocument.Parse(line);
+            var root = message.RootElement;
+            if (!root.TryGetProperty("id", out var id) || !id.TryGetInt32(out var value) || value is not (2 or 3))
+                continue;
+            if (value == 2)
+            {
+                // Account metadata is optional, including on older servers.
+                accountReceived = true;
+                if (!root.TryGetProperty("error", out _) && root.TryGetProperty("result", out var account)
+                    && account.ValueKind != JsonValueKind.Null)
+                    accountJson = account.GetRawText();
+            }
+            else
+            {
+                if (root.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object)
+                    throw new InvalidOperationException($"Codex app-server: {TryGetString(error, "message") ?? "unknown error"}");
+                if (!root.TryGetProperty("result", out var limits) || limits.ValueKind == JsonValueKind.Null)
+                    throw new InvalidOperationException("Codex app-server returned no rate-limit result");
+                rateLimitsJson = limits.GetRawText();
+            }
+        }
+        return (accountJson, rateLimitsJson);
     }
 
     private static async Task WriteJsonLineAsync(Process process, object value)
@@ -431,4 +511,3 @@ internal sealed class CodexUsageProvider : IUsageProvider
 
     public void Dispose() => _refreshLock.Dispose();
 }
-

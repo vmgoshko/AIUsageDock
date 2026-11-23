@@ -10,6 +10,18 @@ internal static class ExecutableResolver
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         var pathValue = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
 
+        // Codex desktop's launcher wraps a versioned native executable. Prefer it
+        // directly to avoid flashing a batch console on every background refresh.
+        var desktopBin = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "OpenAI", "Codex", "bin");
+        if (Directory.Exists(desktopBin))
+        {
+            var desktop = new DirectoryInfo(desktopBin).GetDirectories()
+                .OrderByDescending(directory => directory.LastWriteTimeUtc)
+                .Select(directory => Path.Combine(directory.FullName, "codex.exe"))
+                .FirstOrDefault(File.Exists);
+            if (desktop is not null) return desktop;
+        }
         return ResolveCodex(pathValue, appData, home, RuntimeInformation.OSArchitecture);
     }
 

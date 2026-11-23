@@ -103,6 +103,26 @@ public sealed class ProviderParserTests
     }
 
     [Fact]
+    public void ClaudeControlResponseUsesOnlyTheMatchingUsageReply()
+    {
+        const string output = """
+        {"type":"control_response","response":{"subtype":"success","request_id":"another-request","response":{"rate_limits":{"five_hour":{"utilization":90}}}}}
+        {"type":"control_response","response":{"subtype":"success","request_id":"dock-usage","response":{"subscription_type":"pro","rate_limits":{"five_hour":{"utilization":3,"resets_at":"2026-11-11T02:30:00+04:00"},"seven_day":{"utilization":0,"resets_at":"2026-11-17T12:00:00+04:00"}}}}}
+        """;
+        var now = new DateTimeOffset(2026, 11, 10, 18, 0, 0, TimeSpan.Zero);
+        using var account = System.Text.Json.JsonDocument.Parse("""{"email":"user@example.com"}""");
+
+        var snapshot = ClaudeUsageProvider.ParseUsageResponse(output, account.RootElement, now);
+
+        Assert.NotNull(snapshot);
+        Assert.Equal(97, snapshot.Session!.RemainingPercent);
+        Assert.Equal(100, snapshot.Weekly!.RemainingPercent);
+        Assert.Equal(new DateTimeOffset(2026, 11, 10, 22, 30, 0, TimeSpan.Zero), snapshot.Session.ResetsAt);
+        Assert.Equal("Claude Pro", snapshot.Plan);
+        Assert.Contains(new UsageDetail("Account", "user@example.com"), snapshot.AccountDetails);
+    }
+
+    [Fact]
     public void ClaudeLegacyUsageParserKeepsBindingWeeklyLimit()
     {
         const string resultText = """

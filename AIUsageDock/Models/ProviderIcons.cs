@@ -17,4 +17,17 @@ internal static class ProviderIcons
     }
 
     public static IconInfo Filled(IUsageProvider provider) => IconHelpers.FromRelativePath(FilledPath(provider));
+
+    public static string DockPath(IUsageProvider provider, double? remainingPercent)
+    {
+        var severity = remainingPercent switch
+        {
+            <= 5 => "critical",
+            <= 20 => "warning",
+            _ => null,
+        };
+        return severity is not null && provider.IconName == "codex"
+            ? $"Assets\\icons\\{provider.IconName}-{severity}.svg"
+            : FilledPath(provider);
+    }
 }

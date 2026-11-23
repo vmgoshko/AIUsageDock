@@ -118,7 +118,7 @@ public sealed class UsageCardTests
 
     [Theory]
     [InlineData("CliUnavailable", "Codex CLI not found", "`codex` is on your PATH")]
-    [InlineData("NotSignedIn", "Codex is not signed in", "`codex login`")]
+    [InlineData("NotSignedIn", "Codex is not signed in", "Sign in with ChatGPT")]
     [InlineData("TimedOut", "Codex did not respond", "Refresh AI usage")]
     [InlineData("InvalidData", "Codex reported no usage data", "/usage")]
     public void FailureCardsExplainWhatToDo(string reasonName, string heading, string hint)

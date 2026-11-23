@@ -116,6 +116,46 @@ internal sealed partial class ClaudeUsageProvider : IUsageProvider
             return null;
         }
 
+        var details = new List<UsageDetail>();
+        var plan = ReadAccountDetails(root, details);
+        return ParseUtilization(utilization, now, fetchedAt ?? now, "Claude usage cache", plan, details);
+    }
+
+    private const string UsageRequestId = "dock-usage";
+    internal const string UsageRequest =
+        $$$"""{"type":"control_request","request_id":"{{{UsageRequestId}}}","request":{"subtype":"get_usage","skip_behaviors":true}}""";
+
+    internal static UsageSnapshot? ParseUsageResponse(string output, JsonElement account, DateTimeOffset now)
+    {
+        foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            using var document = JsonDocument.Parse(line);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || TryGetString(root, "type") != "control_response" ||
+                !root.TryGetProperty("response", out var envelope) || envelope.ValueKind != JsonValueKind.Object ||
+                TryGetString(envelope, "request_id") != UsageRequestId || TryGetString(envelope, "subtype") != "success" ||
+                !envelope.TryGetProperty("response", out var response) || response.ValueKind != JsonValueKind.Object ||
+                !response.TryGetProperty("rate_limits", out var utilization) || utilization.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            var details = new List<UsageDetail>();
+            var subscription = TryGetString(response, "subscription_type") ?? TryGetString(account, "subscriptionType");
+            var plan = subscription is null ? null : DescribePlan($"claude_{subscription}", null);
+            if (plan is not null) details.Add(new UsageDetail("Plan", plan));
+            var email = TryGetString(account, "email");
+            if (!string.IsNullOrWhiteSpace(email)) details.Add(new UsageDetail("Account", email));
+            return ParseUtilization(utilization, now, now, "Claude Code usage", plan, details);
+        }
+
+        return null;
+    }
+
+    private static UsageSnapshot? ParseUtilization(
+        JsonElement utilization, DateTimeOffset now, DateTimeOffset fetchedAt,
+        string source, string? plan, List<UsageDetail> details)
+    {
         // Shared buckets first. The "limits" array may repeat them with a severity, so
         // the two sources are merged by kind rather than appended.
         var windows = new List<UsageWindow>();
@@ -170,17 +210,15 @@ internal sealed partial class ClaudeUsageProvider : IUsageProvider
             return null;
         }
 
-        var details = new List<UsageDetail>();
         var notes = new List<string>();
-        var plan = ReadAccountDetails(root, details);
         ReadExtraUsage(utilization, details, notes);
 
         return new UsageSnapshot(
             "Claude",
             plan,
             shared,
-            fetchedAt ?? now,
-            "Claude usage cache",
+            fetchedAt,
+            source,
             Details: details,
             Notes: notes);
     }

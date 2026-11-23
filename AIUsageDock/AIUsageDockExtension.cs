@@ -3,7 +3,7 @@ using Microsoft.CommandPalette.Extensions;
 
 namespace AIUsageDock;
 
-[Guid("a8900b57-444a-4352-99ba-9bb6f5d4316c")]
+[Guid("f521ca1e-54ec-4dca-87f6-e1ddba95bf58")]
 public sealed partial class AIUsageDockExtension : IExtension, IDisposable
 {
     private readonly ManualResetEvent _disposed;
@@ -23,4 +23,3 @@ public sealed partial class AIUsageDockExtension : IExtension, IDisposable
         _disposed.Set();
     }
 }
-
